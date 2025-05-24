@@ -1,0 +1,48 @@
+
+
+
+curl http://127.0.0.1:9180/apisix/admin/upstreams/gcp_provider -H "X-API-KEY: dd" -X PUT -d '{
+    "type": "roundrobin",
+    "name": "gcp_provider",
+    "discovery_type": "eureka-filter",
+    "service_name": "SERVICE-PROVIDER",
+        "discovery_args": {
+        "zone": "gcp"
+    }
+}'
+
+
+
+curl  -i http://127.0.0.1:9180/apisix/admin/upstreams/aws_provider -H "X-API-KEY: dd" -X PUT -d '{
+    "type": "roundrobin",
+    "name": "aws_provider",
+    "discovery_type": "eureka-filter",
+    "service_name": "SERVICE-PROVIDER",
+        "discovery_args": {
+        "zone": "aws"
+    }
+}'
+
+
+curl -i http://127.0.0.1:9180/apisix/admin/routes/gcp_aws_traffic_split -H "X-API-KEY: dd" -X PUT -d '
+{
+  "uri": "/hello",
+  "plugins": {
+    "traffic-split": {
+      "rules": [
+        {
+          "weighted_upstreams": [
+            {
+              "upstream_id": "gcp_provider",
+              "weight": 90
+            },
+            {
+              "upstream_id": "aws_provider",
+              "weight": 10
+            }
+          ]
+        }
+      ]
+    }
+  }
+}'
