@@ -25,6 +25,8 @@ local ipairs  = ipairs
 local type    = type
 local table   = table
 local math_floor = math.floor
+local str_find = string.find
+local sub_str = string.sub
 local exporter = require("apisix.plugins.prometheus.exporter")
 local protocols = require("apisix.plugins.ai-protocols")
 local transport_http = require("apisix.plugins.ai-transport.http")
@@ -75,6 +77,21 @@ local function resolve_cap(cap_entry, key, conf, ctx)
         return val(conf, ctx)
     end
     return val
+end
+
+
+-- proxy-rewrite updates ngx.var.uri via ngx.req.set_uri, but ctx.var.uri may
+-- already be cached by routing. $upstream_uri is the exact path a normal
+-- proxy_pass uses; fall back to ctx.var.uri when no plugin supplied it.
+local function passthrough_path(ctx)
+    local path = ctx.var.upstream_uri
+    if not path or path == "" then
+        return ctx.var.uri
+    end
+
+    -- The query string is forwarded separately through client_args.
+    local query_pos = str_find(path, "?", 1, true)
+    return query_pos and sub_str(path, 1, query_pos - 1) or path
 end
 
 
@@ -239,10 +256,10 @@ function _M.before_proxy(conf, ctx, on_error)
             converter = nil
             target_proto = client_protocol
         elseif client_protocol == "passthrough" then
-            -- Catch-all: proxy to the original request URI path
+            -- Catch-all: proxy to the path selected for upstream traffic.
             converter = nil
             target_proto = "passthrough"
-            target_path = ctx.var.uri
+            target_path = passthrough_path(ctx)
         else
             -- Find a converter to bridge the gap
             local conv, target_protocol = protocols.find_converter(client_protocol, caps)
